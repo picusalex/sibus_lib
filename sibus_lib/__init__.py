@@ -7,7 +7,7 @@
     reminiscent.
 """
 
-__version__ = "0.0.9"
+__version__ = "0.0.10"
 
 from sibus_lib.DefaultLogger import mylogger
 from sibus_lib.MessagingCore import BusElement, BusCore, MessageObject, set_zmq_interfaces
