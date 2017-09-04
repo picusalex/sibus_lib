@@ -1,18 +1,20 @@
 
 
-import yaml
-import os
 import logging
+import os
+
+import yaml
 
 logger = logging.getLogger()
 
-class MyConfig():
-    POSSIBLE_FOLDERS = ["/etc/alpibus",
-                        os.path.join(os.path.expanduser("~"), ".alpibus"),
+
+class SmartConfigFile():
+    POSSIBLE_FOLDERS = ["/etc/default",
+                        os.path.join(os.path.expanduser("~"), ".sibus"),
                         os.getcwd(),
-                        os.getenv('ALPIBUS_DIR', "/etc/alpibus")
+                        os.getenv('ALPIBUS_DIR', "/etc/sibus")
                         ]
-    DEFAULT_CONFIGILE = "config.yml"
+    DEFAULT_CONFIGILE = "sibus.yml"
 
     def __init__(self, configfile=None):
         self.__set_configfile(configfile)

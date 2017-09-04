@@ -6,20 +6,22 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-from sibus_lib.lib import float_to_datetime, datetime_now_float
+from sibus_lib.utils import float_to_datetime, datetime_now_float
 
 logger = logging.getLogger()
 
 CoreDBBase = declarative_base()
 
 class CoreDatabase(threading.Thread):
-    def __init__(self):
+    def __init__(self, host="127.0.0.1", port=3306, login=None, password=None, database=None):
         threading.Thread.__init__(self)
         self._stopevent = threading.Event()
+        self._sql_url = "mysql+mysqldb://%s:%s@%s:%d/%s" % (login, password, host, port, database)
         self.init_db()
 
     def init_db(self):
-        engine = create_engine("mysql+mysqldb://root:alpi@localhost:3306/car_dashboard", echo=True)
+        logger.info("Connecting to SQL DB on " + self._sql_url)
+        engine = create_engine(self._sql_url, echo=True)
         CoreDBBase.metadata.create_all(engine)
         Session = sessionmaker()
         Session.configure(bind=engine)

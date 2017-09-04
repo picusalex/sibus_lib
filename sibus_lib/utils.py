@@ -34,3 +34,47 @@ def float_to_datetime(fl):
 def datetime_now_float():
     return datetime_to_float(dt.datetime.utcnow())
 
+
+def sibus_install():
+    import os, shutil
+    from pkg_resources import resource_filename, resource_exists
+    from sibus_lib.SmartConfig import SmartConfigFile
+
+    print "installing SiBus Library..."
+
+    sibus_config = resource_filename("sibus_lib", "resources/sibus.yml")
+    config_dst = os.path.join("/etc/default", "sibus.yml")
+
+    if not resource_exists("sibus_lib", "resources/sibus.yml"):
+        raise Exception("Config file not found ! " + sibus_config)
+
+    if not os.path.isfile(config_dst):
+        print "Copying config file in " + config_dst
+        shutil.copy(sibus_config, config_dst)
+    else:
+        print "Config file " + config_dst + " already exists"
+
+    cfg_data = SmartConfigFile(config_dst)
+
+    db_host = cfg_data.get(["sql_database", "host", ], "127.0.0.1")
+    db_port = cfg_data.get(["sql_database", "port", ], 3306)
+    db_login = cfg_data.get(["sql_database", "login", ], None)
+    db_password = cfg_data.get(["sql_database", "password", ], None)
+    db_database = cfg_data.get(["sql_database", "database", ], "sibus_database")
+
+    from sqlalchemy import create_engine
+    from sqlalchemy_utils import database_exists, create_database
+
+    if db_login is not None and db_password is not None:
+        _sql_url = "mysql+mysqldb://%s:%s@%s:%d/%s" % (db_login, db_password, db_host, db_port, db_database)
+    else:
+        _sql_url = "mysql+mysqldb://%s:%d/%s" % (db_host, db_port, db_database)
+
+    engine = create_engine(_sql_url)
+    if not database_exists(engine.url):
+        print "Creating SQL database with " + _sql_url
+        create_database(engine.url)
+    else:
+        print "SQL database " + _sql_url + " already exists"
+
+    print "Installation complete !"

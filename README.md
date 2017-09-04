@@ -7,7 +7,11 @@ Vous pouvez l'installer avec pip:
 
 Exemple d'usage:
 
-    >>> from sibus_lib import proclamer
-    >>> proclamer()
+    >>> from sibus_lib import sibus_init
+    >>> from sibus_lib import BusCore
+
+    >>> logger, cfg_data = sibus_init("bus.core")
+    >>> buscore = BusCore()
+    >>> buscore.start()
 
 Ce code est sous licence WTFPL.

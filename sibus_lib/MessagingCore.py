@@ -11,19 +11,26 @@ import time
 import uuid
 
 import zmq
-from lib.myconfig import MyConfig
-from lib.mymessage.SysmonData import SysmonSchema
-from lib.utils import float_to_datetime, datetime_now_float
 from marshmallow import Schema, fields, post_load, ValidationError
+
+from sibus_lib.utils import float_to_datetime, datetime_now_float
 
 logger = logging.getLogger()
 
-DATAQUEUE_NAME = "dataflow"
-ADMINQUEUE_NAME = "adminflow"
+LISTEN_INTF_SRV = None
+PUBLISH_INTF_SRV = None
 
-SUPPORTED_MESSAGE_CATEGORIES = {
-    "info.sysmon" : SysmonSchema
-}
+LISTEN_INTF_CLT = None
+PUBLISH_INTF_CLT = None
+
+
+def set_zmq_interfaces(listen_intf_srv, publish_intf_srv, listen_intf_clt, publish_intf_clt):
+    global LISTEN_INTF_SRV, PUBLISH_INTF_SRV, LISTEN_INTF_CLT, PUBLISH_INTF_CLT
+    LISTEN_INTF_SRV = listen_intf_srv
+    PUBLISH_INTF_SRV = publish_intf_srv
+
+    LISTEN_INTF_CLT = listen_intf_clt
+    PUBLISH_INTF_CLT = publish_intf_clt
 
 ###############################################################################################
 ###############################################################################################
@@ -98,24 +105,6 @@ class MessageObject:
 
 ###############################################################################################
 ###############################################################################################
-
-cfg_data = MyConfig()
-print cfg_data.configfilepath
-
-SERVER_IP = cfg_data.get(["buscore","host",],"127.0.0.1")
-logger.info("Bus Core Config IP: "+SERVER_IP)
-
-PUBLISH_PORT = cfg_data.get(["buscore","internal_port",],1111)
-logger.info("Bus Core internal queue port: "+str(PUBLISH_PORT))
-
-MESSAGE_PORT = cfg_data.get(["buscore","port",],1981)
-logger.info("Bus Core listening queue port: "+str(MESSAGE_PORT))
-
-LISTEN_INTF_SRV = "tcp://*:%s"%PUBLISH_PORT
-PUBLISH_INTF_SRV = "tcp://*:%s"%MESSAGE_PORT
-
-LISTEN_INTF_CLT = "tcp://%s:%s"%(SERVER_IP,MESSAGE_PORT)
-PUBLISH_INTF_CLT = "tcp://%s:%s"%(SERVER_IP,PUBLISH_PORT)
 
 class BusCore(threading.Thread):
     def __init__(self):

@@ -3,13 +3,13 @@
 
 import logging
 import os
-import sys
 
 from logging.handlers import RotatingFileHandler
 
-LOG_DIRECTORY = "/tmp/car.dashboard"
+LOG_DIRECTORY = "/tmp/sibus"
 
-def mylogger(logger_name):
+
+def mylogger(logger_name, log_folder=LOG_DIRECTORY):
     # création de l'objet logger qui va nous servir à écrire dans les logs
     logger = logging.getLogger()
     # on met le niveau du logger à DEBUG, comme ça il écrit tout
@@ -22,11 +22,11 @@ def mylogger(logger_name):
     # création d'un handler qui va rediriger une écriture du log vers
     # un fichier en mode 'append', avec 1 backup et une taille max de 1Mo
 
-    if not os.path.isdir(LOG_DIRECTORY):
-        print "Creating log directory: ", LOG_DIRECTORY
-        os.makedirs(LOG_DIRECTORY)
+    if not os.path.isdir(log_folder):
+        print "Creating log directory: ", log_folder
+        os.makedirs(log_folder)
 
-    log_file = os.path.join(LOG_DIRECTORY, logger_name+'.log')
+    log_file = os.path.join(log_folder, logger_name + '.log')
     print "Log file: ", log_file
     file_handler = RotatingFileHandler(log_file, 'a', 1000000, 1)
     # on lui met le niveau sur DEBUG, on lui dit qu'il doit utiliser le formateur
