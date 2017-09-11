@@ -52,7 +52,7 @@ setup(
                       "marshmallow",
                       "sqlalchemy",
                       "sqlalchemy_utils",
-                      "MySQL-python",
+                      "PyMySQL",
                       "python-dateutil"],
 
     # Active la prise en compte du fichier MANIFEST.in

@@ -12,7 +12,6 @@ class SmartConfigFile():
     POSSIBLE_FOLDERS = ["/etc/default",
                         os.path.join(os.path.expanduser("~"), ".sibus"),
                         os.getcwd(),
-                        os.getenv('ALPIBUS_DIR', "/etc/sibus")
                         ]
     DEFAULT_CONFIGILE = "sibus.yml"
 

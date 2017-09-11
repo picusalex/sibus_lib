@@ -43,10 +43,14 @@ def sibus_install():
     print "installing SiBus Library..."
 
     sibus_config = resource_filename("sibus_lib", "resources/sibus.yml")
-    config_dst = os.path.join("/etc/default", "sibus.yml")
+    config_dst_dir = os.path.join(os.path.expanduser("~"), ".sibus")
+    config_dst = os.path.join(config_dst_dir, "sibus.yml")
 
     if not resource_exists("sibus_lib", "resources/sibus.yml"):
         raise Exception("Config file not found ! " + sibus_config)
+
+    if not os.path.isdir(config_dst_dir):
+        os.makedirs(config_dst_dir)
 
     if not os.path.isfile(config_dst):
         print "Copying config file in " + config_dst
@@ -66,9 +70,9 @@ def sibus_install():
     from sqlalchemy_utils import database_exists, create_database
 
     if db_login is not None and db_password is not None:
-        _sql_url = "mysql+mysqldb://%s:%s@%s:%d/%s" % (db_login, db_password, db_host, db_port, db_database)
+        _sql_url = "mysql+pymysql://%s:%s@%s:%d/%s" % (db_login, db_password, db_host, db_port, db_database)
     else:
-        _sql_url = "mysql+mysqldb://%s:%d/%s" % (db_host, db_port, db_database)
+        _sql_url = "mysql+pymysql://%s:%d/%s" % (db_host, db_port, db_database)
 
     engine = create_engine(_sql_url)
     if not database_exists(engine.url):
@@ -78,3 +82,4 @@ def sibus_install():
         print "SQL database " + _sql_url + " already exists"
 
     print "Installation complete !"
+

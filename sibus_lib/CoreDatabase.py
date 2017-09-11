@@ -16,7 +16,7 @@ class CoreDatabase(threading.Thread):
     def __init__(self, host="127.0.0.1", port=3306, login=None, password=None, database=None):
         threading.Thread.__init__(self)
         self._stopevent = threading.Event()
-        self._sql_url = "mysql+mysqldb://%s:%s@%s:%d/%s" % (login, password, host, port, database)
+        self._sql_url = "mysql+pymysql://%s:%s@%s:%d/%s" % (login, password, host, port, database)
         self.init_db()
 
     def init_db(self):

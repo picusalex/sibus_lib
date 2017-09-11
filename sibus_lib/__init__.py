@@ -14,7 +14,6 @@ from sibus_lib.MessagingCore import BusElement, BusCore, MessageObject, set_zmq_
 from sibus_lib.MessagingCore import PUBLISH_INTF_CLT, PUBLISH_INTF_SRV, LISTEN_INTF_CLT, LISTEN_INTF_SRV
 from sibus_lib.SmartConfig import SmartConfigFile
 
-
 def sibus_init(logger_name):
     cfg_data = SmartConfigFile()
     print "Config filepath: " + cfg_data.configfilepath
