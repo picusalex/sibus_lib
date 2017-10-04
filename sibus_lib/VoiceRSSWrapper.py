@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: iso-8859-1 -*-
 
-import argparse
 import base64
-import urllib
-import urllib2
-import subprocess
+import datetime as dt
+import logging
 import os
 import sys
-import logging
-import datetime as dt
+import urllib
+import urllib2
+
+from sibus_lib.utils import exec_process
 
 __author__ = 'Alex'
 
@@ -20,9 +20,8 @@ class TextToSpeech:
     DOC_URL = "http://www.voicerss.org/api/documentation.aspx"
     APIKEY = "52a168f7eeb74d2ba633eb074453f66c"
 
-    FILEDIR = "/tmp/voiceRSS/tts"
-
-    def __init__(self, text, lang='fr-fr', debug=False):
+    def __init__(self, text, lang='fr-fr', tmp_dir="/tmp/voiceRSS/tts", debug=False):
+        self.FILEDIR = tmp_dir
         if not os.path.isdir(self.FILEDIR):
             os.makedirs(self.FILEDIR)
 
@@ -109,9 +108,8 @@ class TextToSpeech:
         return base64.b64encode(raw_data)
 
 class AudioPlayer:
-    FILEDIR = "/tmp/voiceRSS/play"
-
-    def __init__(self):
+    def __init__(self, tmp_dir="/tmp/voiceRSS/play"):
+        self.FILEDIR = tmp_dir
         if not os.path.isdir(self.FILEDIR):
             os.makedirs(self.FILEDIR)
 
@@ -131,19 +129,12 @@ class AudioPlayer:
 
         try:
             logger.info("Playing file: %s" % filepath)
-            p = subprocess.Popen(["/usr/bin/mplayer", filepath], stderr=subprocess.PIPE)
-            rc = p.poll()
-            while rc is None:
-                output = p.stderr.readline()
-                if output != "":
-                    print output.strip()
-                rc = p.poll()
-            if (rc != 0):
-                raise Exception("ERROR: Process exits with code: %d" % rc)
-            else:
-                logger.info("Play TTS ends correctly")
-        except subprocess.CalledProcessError as e:
-            raise Exception(e)
+            exec_process("/usr/bin/mplayer \"%s\"" % filepath)
+        except Exception as e:
+            logger.error("Error while playing file: %s" % filepath)
+
+        os.remove(filepath)
+
 
 
 ######################################################################################

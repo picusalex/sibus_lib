@@ -47,12 +47,9 @@ setup(
     #
     # Dans notre cas on en a pas besoin, donc je le commente, mais je le
     # laisse pour que vous sachiez que ça existe car c'est très utile.
-    install_requires=["zmq",
+    install_requires=["pyzmq",
                       "PyYaml",
                       "marshmallow",
-                      "sqlalchemy",
-                      "sqlalchemy_utils",
-                      "PyMySQL",
                       "python-dateutil"],
 
     # Active la prise en compte du fichier MANIFEST.in

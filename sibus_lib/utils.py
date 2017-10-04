@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import datetime as dt
+import logging
 import random
+import subprocess
+
+logger = logging.getLogger()
 
 def nice_float(value):
     return float("%.6f" % float(value))
@@ -83,3 +87,18 @@ def sibus_install():
 
     print "Installation complete !"
 
+
+def exec_process(cmd_line):
+    logger.info("Launching command '%s'" % str(cmd_line))
+    p = subprocess.Popen(cmd_line, stderr=subprocess.PIPE, shell=True)
+    rc = p.poll()
+    while rc is None:
+        output = p.stderr.readline()
+        if output != "":
+            logger.debug(output.strip())
+        rc = p.poll()
+    if (rc != 0):
+        raise Exception("ERROR: Process exits with code: %d" % rc)
+    else:
+        logger.info("Command '%s' executed correctly" % str(cmd_line))
+        return rc

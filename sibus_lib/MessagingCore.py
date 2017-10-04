@@ -78,9 +78,15 @@ class MessageObject:
         self.set_data(data)
 
     def __repr__(self):
+        tmp_data = self.get_data()
+        if tmp_data is not None and len(tmp_data) > 2048:
+            data = "long data:%d" % len(tmp_data)
+        else:
+            data = tmp_data
+
         return "<BusMessage> origin:%s.%s; topic:%s; date:%s; data:%s"%(self.origin_host, self.origin_service, self.topic,
-                                                                            str(float_to_datetime(self.date_creation)),
-                                                                            self.get_data())
+                                                                        str(float_to_datetime(self.date_creation)),
+                                                                        data)
 
     def set_data(self, data):
         if data is None:
@@ -132,10 +138,16 @@ class BusCore(threading.Thread):
         self.zmq_send.bind(PUBLISH_INTF_SRV)
         logger.info("Bus Core Sending messages on "+PUBLISH_INTF_SRV)
 
-    def publish(self, msg):
+    def publish(self, msg, from_core=False):
         """self.channel.basic_publish(exchange='',
                               routing_key=DATAQUEUE_NAME,
                               body=msg.msg())"""
+        if from_core:
+            msg.origin_uid = 0
+            msg.origin_service = "sibus.core"
+        else:
+            msg.origin_uid = msg.origin_uid
+            msg.origin_service = msg.origin_service
         json_result = msg.toJson()
 
         logger.info("Core Bus publishing message : %s"%str(msg))
@@ -169,12 +181,7 @@ class BusCore(threading.Thread):
                 return
 
             logger.debug("Bus Core received a message : %s" % str(message))
-            #self.client_list.client_message(message)
-            """self._db.update_buselement(bus_uid=message.origin_uid,
-                                       host=message.origin_host,
-                                       service=message.origin_service,
-                                       event_date=message.date_creation)
-            """
+
             self.publish(message)
 
         logger.info("Bus core stopped listening message.")
@@ -210,10 +217,11 @@ class BusElement(threading.Thread):
 
     def register_topic(self, topic_pattern):
         if topic_pattern == "*":
-            regex = topic_pattern
+            self.registered_topics.append(topic_pattern)
         else:
+            topic_pattern = topic_pattern.replace("*", ".*?")
             regex = re.compile(topic_pattern)
-        self.registered_topics.append(regex)
+            self.registered_topics.append(regex)
 
     def set_callback(self, callback):
         self._callback = callback
@@ -250,8 +258,9 @@ class BusElement(threading.Thread):
         for topic in self.registered_topics:
             if topic == "*" or topic.match(message.topic) is not None:
                 if self._callback is not None:
-                    logger.info("Message triggered: %s" % str(message))
+                    logger.debug("Message triggered: %s" % str(message))
                     self._callback(message)
+                    return
 
     def publish(self, msg):
         """self.channel.basic_publish(exchange='',
@@ -261,12 +270,12 @@ class BusElement(threading.Thread):
         msg.origin_service = self.service_name
         json_result = msg.toJson()
 
-        logger.info("Publishing message : %s" % str(msg))
+        logger.debug("Publishing message : %s" % str(msg))
 
         try:
             self.zmq_send.send(json_result)
         except zmq.ZMQError as err:
-            logger.info("ZMQ error trying to send message: %s"%str(err))
+            logger.error("ZMQ error trying to send message: %s" % str(err))
 
     def run(self):
         logger.info("Bus client start listening messages on bus")
@@ -277,17 +286,18 @@ class BusElement(threading.Thread):
             try:
                 # Capture the message and store it
                 body = self.zmq_recv.recv(zmq.NOBLOCK)
+                self.__internal_data_cb(body)
                 #logger.debug("Message received : %s"%str(body))
             except zmq.ZMQError as err:
                 #logger.error("ZMQ error message : %s" % str(err))
-                time.sleep(0.01)
-                dt_now = dt.datetime.now()
-                if (dt_now-dt_start).seconds > 30:
-                    self.publish(MessageObject(topic="admin.heartbeat"))
-                    dt_start = dt_now
                 continue
 
-            self.__internal_data_cb(body)
+            time.sleep(0.01)
+            dt_now = dt.datetime.now()
+            if (dt_now - dt_start).seconds > 30:
+                self.publish(MessageObject(topic="admin.heartbeat"))
+                dt_start = dt_now
+
         logger.info("Bus client stopped listening messages on bus")
 
     def stop(self):

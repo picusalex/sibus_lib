@@ -25,6 +25,7 @@ def mylogger(logger_name, log_folder=LOG_DIRECTORY):
     if not os.path.isdir(log_folder):
         print "Creating log directory: ", log_folder
         os.makedirs(log_folder)
+        os.chmod(log_folder, 0777)
 
     log_file = os.path.join(log_folder, logger_name + '.log')
     print "Log file: ", log_file
