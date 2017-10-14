@@ -143,7 +143,7 @@ class BusCore(threading.Thread):
                               routing_key=DATAQUEUE_NAME,
                               body=msg.msg())"""
         if from_core:
-            msg.origin_uid = 0
+            msg.origin_uid = 1
             msg.origin_service = "sibus.core"
         else:
             msg.origin_uid = msg.origin_uid
