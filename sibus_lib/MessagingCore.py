@@ -4,6 +4,7 @@ import base64
 import datetime as dt
 import json
 import logging
+import os
 import re
 import socket
 import threading
@@ -178,7 +179,7 @@ class BusCore(threading.Thread):
             except ValidationError as err:
                 logger.error("Invalid message format: %s, dropping it" % str(body))
                 logger.error("    ERRORS: %s" % str(err.messages))
-                return
+                continue
 
             logger.debug("Bus Core received a message : %s" % str(message))
 
@@ -212,7 +213,7 @@ class BusElement(threading.Thread):
         self.registered_topics = []
 
         self.service_name = service_name
-        self.bus_uid = str(uuid.uuid1())
+        self.bus_uid = str(os.getpid())
         self.set_callback(callback=callback)
 
     def register_topic(self, topic_pattern):
@@ -250,7 +251,7 @@ class BusElement(threading.Thread):
             logger.error("Invalid message format: %s, dropping it" % str(body))
             logger.error("    ERRORS: %s" % str(err.messages))
             return
-        pass
+
         if (message.origin_uid == self.bus_uid) and self._ignore_me is True:
             #ignore message published by me !!
             return
@@ -290,9 +291,10 @@ class BusElement(threading.Thread):
                 #logger.debug("Message received : %s"%str(body))
             except zmq.ZMQError as err:
                 #logger.error("ZMQ error message : %s" % str(err))
-                continue
+                pass
 
-            time.sleep(0.01)
+            time.sleep(0.1)
+
             dt_now = dt.datetime.now()
             if (dt_now - dt_start).seconds > 30:
                 self.publish(MessageObject(topic="admin.heartbeat"))
