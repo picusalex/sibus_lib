@@ -3,12 +3,18 @@
 import datetime as dt
 import logging
 import random
+import signal
 import subprocess
+import sys
 
 logger = logging.getLogger()
 
-def nice_float(value):
-    return float("%.6f" % float(value))
+
+def nice_float(value, very_nice=False):
+    if very_nice:
+        return float("%.2f" % float(value))
+    else:
+        return float("%.6f" % float(value))
 
 def parse_num(s):
     try:
@@ -21,6 +27,10 @@ def parse_num(s):
 
 def datetime_now():
     return dt.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")
+
+
+def datetime_now_float():
+    return datetime_to_float(dt.datetime.now())
 
 def random_value(value, percent_range=30):
     t = (random.random() - 0.5)*(percent_range/100.0)
@@ -35,9 +45,26 @@ def datetime_to_float(d):
 def float_to_datetime(fl):
     return dt.datetime.fromtimestamp(fl)
 
-def datetime_now_float():
-    return datetime_to_float(dt.datetime.utcnow())
 
+def safe_get_in_dict(key, ddict, safe=None):
+    if key not in ddict:
+        return safe
+    return ddict[key]
+
+
+def sigterm_handler(_signo, _stack_frame):
+    # Raises SystemExit(0):
+    if _signo <> 0:
+        logger.error("Progam exited with error (status=%d)" % _signo)
+        logger.error(str(_stack_frame))
+    else:
+        logger.info("Progam exited correctly (status=%d)" % _signo)
+    sys.exit(_signo)
+
+
+def handle_signals():
+    signal.signal(signal.SIGTERM, sigterm_handler)
+    signal.signal(signal.SIGINT, sigterm_handler)
 
 def sibus_install():
     import os, shutil
@@ -89,7 +116,7 @@ def sibus_install():
 
 
 def exec_process(cmd_line):
-    logger.info("Launching command '%s'" % str(cmd_line))
+    logger.info("## Launching command '%s'" % str(cmd_line))
     p = subprocess.Popen(cmd_line, stderr=subprocess.PIPE, shell=True)
     rc = p.poll()
     while rc is None:
@@ -98,7 +125,7 @@ def exec_process(cmd_line):
             logger.debug(output.strip())
         rc = p.poll()
     if (rc != 0):
-        raise Exception("ERROR: Process exits with code: %d" % rc)
+        raise Exception("  !! ERROR: Process exits with code: %d" % rc)
     else:
-        logger.info("Command '%s' executed correctly" % str(cmd_line))
+        logger.info(" == Command '%s' executed correctly" % str(cmd_line))
         return rc

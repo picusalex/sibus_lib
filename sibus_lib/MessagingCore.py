@@ -1,37 +1,27 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import base64
-import datetime as dt
 import json
 import logging
-import os
-import re
 import socket
-import threading
 import time
 import uuid
 
-import zmq
-from marshmallow import Schema, fields, post_load, ValidationError
+import paho.mqtt.client as paho
+from marshmallow import Schema, fields, post_load
 
-from sibus_lib.utils import float_to_datetime, datetime_now_float
+from sibus_lib.utils import float_to_datetime, datetime_now_float, safe_get_in_dict
 
 logger = logging.getLogger()
 
-LISTEN_INTF_SRV = None
-PUBLISH_INTF_SRV = None
-
-LISTEN_INTF_CLT = None
-PUBLISH_INTF_CLT = None
+MQTT_HOST = None
+MQTT_PORT = None
 
 
-def set_zmq_interfaces(listen_intf_srv, publish_intf_srv, listen_intf_clt, publish_intf_clt):
-    global LISTEN_INTF_SRV, PUBLISH_INTF_SRV, LISTEN_INTF_CLT, PUBLISH_INTF_CLT
-    LISTEN_INTF_SRV = listen_intf_srv
-    PUBLISH_INTF_SRV = publish_intf_srv
-
-    LISTEN_INTF_CLT = listen_intf_clt
-    PUBLISH_INTF_CLT = publish_intf_clt
+def set_mqtt_broker(mqtt_host, mqtt_port):
+    global MQTT_HOST, MQTT_PORT
+    MQTT_HOST = mqtt_host
+    MQTT_PORT = mqtt_port
 
 ###############################################################################################
 ###############################################################################################
@@ -113,201 +103,164 @@ class MessageObject:
 ###############################################################################################
 ###############################################################################################
 
-class BusCore(threading.Thread):
-    def __init__(self):
-        threading.Thread.__init__(self)
-        self._stopevent = threading.Event()
+class BusClient():
+    def __init__(self,
+                 device_name,
+                 service_name,
+                 broker=None,
+                 port=None,
+                 onmessage_cb=None):
+        self.device_name = device_name
+        self.service_name = service_name
+        self.sibus_values = {}
 
-        # Initialize the ZeroMQ context
-        self.context = zmq.Context()
-        self._init_reception_queue()
-        self._init_emission_queue()
+        self.broker_name = None
+        self.broker_port = None
+        self._callback = onmessage_cb
 
+        self.client = paho.Client("%s:%s" % (self.device_name, self.service_name))
+        self.client.on_message = self.on_message
+        self.connect(broker, port=port)
 
-    def _init_reception_queue(self):
-        # Configure ZeroMQ to receive messages
-        self.zmq_recv = self.context.socket(zmq.SUB)
-        # The communication is made on socket 1112
-        self.zmq_recv.bind(LISTEN_INTF_SRV)
-        self.zmq_recv.setsockopt(zmq.SUBSCRIBE, '')  # subscribe to everything
-        logger.info("Bus Core Receiving messages on "+LISTEN_INTF_SRV)
+    def set_message_callback(self, cb):
+        self._callback = cb
 
-    def _init_emission_queue(self):
-        # Configure ZeroMQ to send messages
-        self.zmq_send = self.context.socket(zmq.PUB)
-        # The communication is made on socket 1111
-        self.zmq_send.bind(PUBLISH_INTF_SRV)
-        logger.info("Bus Core Sending messages on "+PUBLISH_INTF_SRV)
-
-    def publish(self, msg, from_core=False):
-        """self.channel.basic_publish(exchange='',
-                              routing_key=DATAQUEUE_NAME,
-                              body=msg.msg())"""
-        if from_core:
-            msg.origin_uid = 1
-            msg.origin_service = "sibus.core"
-        else:
-            msg.origin_uid = msg.origin_uid
-            msg.origin_service = msg.origin_service
-        json_result = msg.toJson()
-
-        logger.info("Core Bus publishing message : %s"%str(msg))
-
+    def connect(self, broker=None, port=None):
+        if broker is None and self.broker_name is None:
+            self.broker_name = MQTT_HOST
+        if port is None and self.broker_port is None:
+            self.broker_port = MQTT_PORT
+        logger.info("Connecting to MQTT broker %s:%d" % (self.broker_name, self.broker_port))
         try:
-            self.zmq_send.send(json_result)
-        except zmq.ZMQError as err:
-            logger.info("Error while trying to publish the message : %s"%str(err))
+            self.client.connect(self.broker_name, self.broker_port)
+        except socket.error:
+            logger.error("  ==> Fail to connect !")
             return False
-
+        logger.info("  ==> Connected !")
         return True
 
-    def run(self):
-        logger.info("Bus core start listening messages")
-        while not self._stopevent.isSet():
-            # Command to wait for an incoming message
-            try:
-                # Capture the message and store it
-                body = self.zmq_recv.recv(zmq.NOBLOCK)
-            except zmq.ZMQError as err:
-                #logger.error("ZMQ Error : %s" % str(err))
-                time.sleep(0.01)
-                continue
+    def reconnect(self):
+        logger.info("Reconnecting to broker %s:%d" % (self.broker_name, self.broker_port))
+        try:
+            self.client.reconnect()
+        except socket.error:
+            logger.error("  ==> Fail to reconnect !")
+            return False
+        logger.info("  ==> Reconnected !")
 
-            schema = MessageSchema(strict=True)
-            try:
-                message = schema.toObject(body)
-            except ValidationError as err:
-                logger.error("Invalid message format: %s, dropping it" % str(body))
-                logger.error("    ERRORS: %s" % str(err.messages))
-                continue
+    def disconnect(self):
+        logger.info("Disconnecting from broker %s:%d" % (self.broker_name, self.broker_port))
+        self.client.disconnect()
+        logger.info("  ==> Disconnected !")
 
-            logger.debug("Bus Core received a message : %s" % str(message))
+    def get_cache_value(self, path_string, safe=None):
+        logger.info("Looking for cache value: %s" % path_string)
+        path = path_string.strip("/").split("/")
+        t = self.sibus_values
+        for key in path[1:]:
+            t = safe_get_in_dict(key, t)
+            if t is None:
+                raise Exception(" !!> Value not found for path: %s (near %s)" % (path_string, key))
+        logger.info(" ==> Value found: %s" % str(t))
+        return t
 
-            self.publish(message)
+    def set_cache_value(self, path_string, value):
+        logger.info("Setting cache value: %s=%s" % (path_string, str(value)))
+        path = path_string.strip("/").split("/")
+        t = self.sibus_values
+        for key in path[1:-1]:
+            st = safe_get_in_dict(key, t)
+            if st is None:
+                t[key] = {}
+                t = t[key]
+            else:
+                t = st
+        t[path[-1]] = value
+        pass
 
-        logger.info("Bus core stopped listening message.")
+    def forge_topic(self, sibus_topic):
+        return "sibus/%s/%s/%s" % (self.device_name, self.service_name, sibus_topic)
 
-    def stop(self):
-        self._stopevent.set( )
-        self.zmq_send.close()
-        self.zmq_recv.close()
-        self.context.term()
-        logger.info("Bus core cleaned and terminated. Thank you !")
+    def mqtt_sys_subscribe(self):
+        # topic = "sibus/+/+/info/%s"%sibus_topic.strip("/") # picus internal stuff: first topic element is the name of the origin !
+        logger.info("Listening to MQTT $SYS topic")
+        self.client.subscribe(topic="$SYS/#")
+        self.start()
 
-##############################################################################################""
+    def mqtt_subscribe(self, sibus_topic):
+        # topic = "sibus/+/+/info/%s"%sibus_topic.strip("/") # picus internal stuff: first topic element is the name of the origin !
+        logger.info("Listening to topic: %s" % sibus_topic)
+        self.client.subscribe(topic=sibus_topic)
+        self.start()
 
-class BusElement(threading.Thread):
+    def mqtt_publish(self, topic, payload, qos=0, retain=False):
+        if not topic.startswith("sibus"):
+            logger.error("!!!!!!!!!!!!!! Message not sent !!!!!!!!!!!!!!!!!!!!!!!!!")
+            logger.error("Invalid topic, does not start with 'sibus/': %s" % topic)
+            logger.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            return False
 
-    def __init__(self, service_name,
-                 callback=None,
-                 filter=None,
-                 ignore_my_msg=True):
-        threading.Thread.__init__(self)
-        self._stopevent = threading.Event()
-        # Initialize the ZeroMQ context
-        self.context = zmq.Context()
-        self._init_reception_queue()
-        self._init_emission_queue()
-        self._ignore_me = ignore_my_msg
+        if type(payload) <> dict:
+            logger.error("!!!!!!!!!!!!!! Message not sent !!!!!!!!!!!!!!!!!!!!!!!!!")
+            logger.error("Message payload must be provided as a dict ! Got '%s', %s" % (str(payload), type(payload)))
+            logger.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            return False
 
-        self.registered_topics = []
+        """data_dict["sibus_origin"] = {
+            "host": socket.getfqdn(),
+            "service": self.name
+        }"""
 
-        self.service_name = service_name
-        self.bus_uid = str(os.getpid())
-        self.set_callback(callback=callback)
+        json_s = json.dumps(payload)
+        # json_s = str(data_dict)
+        # b64data = base64.b64encode(json_s)
+        b64data = json_s
 
-    def register_topic(self, topic_pattern):
-        if topic_pattern == "*":
-            self.registered_topics.append(topic_pattern)
+        res = self.client.publish(topic=topic,
+                                  payload=b64data,
+                                  qos=qos,
+                                  retain=retain)
+
+        if res.rc == paho.MQTT_ERR_NO_CONN:
+            logger.error(
+                "MQTT: Message not published, client not connected to %s:%d" % (self.broker_name, self.broker_port))
+            logger.error(" * %s = %s" % (topic, json_s))
+            time.sleep(5.0)
+            self.reconnect()
+            return False
+        elif res.rc == paho.MQTT_ERR_QUEUE_SIZE:
+            logger.error("MQTT: Not published, queue full !")
+            logger.error(" * %s = %s" % (topic, json_s))
+            return False
+        elif res.rc == paho.MQTT_ERR_SUCCESS:
+            logger.debug("MQTT: Message published: %s = %s" % (topic, json_s))
+            return True
         else:
-            topic_pattern = topic_pattern.replace("*", ".*?")
-            regex = re.compile(topic_pattern)
-            self.registered_topics.append(regex)
+            return False
 
-    def set_callback(self, callback):
-        self._callback = callback
+    def on_message(self, client, userdata, message):
+        # json_s = base64.b64decode(message.payload)
+        json_s = message.payload
+        data_dict = json.loads(json_s)
 
-    def _init_reception_queue(self):
-        # Configure ZeroMQ to receive messages
-        self.zmq_recv = self.context.socket(zmq.SUB)
-        # The communication is made on socket 1112
-        logger.info("Receiving messages on " + LISTEN_INTF_CLT)
-        self.zmq_recv.connect(LISTEN_INTF_CLT)
-        self.zmq_recv.setsockopt(zmq.SUBSCRIBE, '')  # subscribe to everything
+        t = message.topic
 
-    def _init_emission_queue(self):
-        # Configure ZeroMQ to send messages
-        self.zmq_send = self.context.socket(zmq.PUB)
-        logger.info("Sending messages on " + PUBLISH_INTF_CLT)
-        # The communication is made on socket 1111
-        self.zmq_send.connect(PUBLISH_INTF_CLT)
+        if not t.startswith("sibus"):
+            logger.error("!!!!!!!!!!!!!! Message ignored  !!!!!!!!!!!!!!!!!!!!!!!!!")
+            logger.error("Message topic does not start by 'sibus'")
+            logger.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            return False
 
+        logger.debug("Sibus Message received: %s = %s" % (t, data_dict))
 
-    def __internal_data_cb(self, body):
-        schema = MessageSchema(strict=True)
-        try:
-            message = schema.toObject(body)
-        except ValidationError as err:
-            logger.error("Invalid message format: %s, dropping it" % str(body))
-            logger.error("    ERRORS: %s" % str(err.messages))
-            return
+        # self.set_cache_value(t, data_dict)
 
-        if (message.origin_uid == self.bus_uid) and self._ignore_me is True:
-            #ignore message published by me !!
-            return
+        if self._callback is not None:
+            self._callback(topic=t, payload=data_dict)
+        return True
 
-        for topic in self.registered_topics:
-            if topic == "*" or topic.match(message.topic) is not None:
-                if self._callback is not None:
-                    logger.debug("Message triggered: %s" % str(message))
-                    self._callback(message)
-                    return
-
-    def publish(self, msg):
-        """self.channel.basic_publish(exchange='',
-                              routing_key=DATAQUEUE_NAME,
-                              body=msg.msg())"""
-        msg.origin_uid = self.bus_uid
-        msg.origin_service = self.service_name
-        json_result = msg.toJson()
-
-        logger.debug("Publishing message : %s" % str(msg))
-
-        try:
-            self.zmq_send.send(json_result)
-        except zmq.ZMQError as err:
-            logger.error("ZMQ error trying to send message: %s" % str(err))
-
-    def run(self):
-        logger.info("Bus client start listening messages on bus")
-        self.publish(MessageObject(topic="admin.start"))
-        dt_start = dt.datetime.now()
-        while not self._stopevent.isSet():
-            # Command to wait for an incoming message
-            try:
-                # Capture the message and store it
-                body = self.zmq_recv.recv(zmq.NOBLOCK)
-                self.__internal_data_cb(body)
-                #logger.debug("Message received : %s"%str(body))
-            except zmq.ZMQError as err:
-                #logger.error("ZMQ error message : %s" % str(err))
-                pass
-
-            time.sleep(0.1)
-
-            dt_now = dt.datetime.now()
-            if (dt_now - dt_start).seconds > 30:
-                self.publish(MessageObject(topic="admin.heartbeat"))
-                dt_start = dt_now
-
-        logger.info("Bus client stopped listening messages on bus")
+    def start(self):
+        self.client.loop_start()
 
     def stop(self):
-        self.publish(MessageObject(topic="admin.terminated"))
-        time.sleep(0.5)
-        self._stopevent.set( )
-        self.zmq_send.close()
-        self.zmq_recv.close()
-        self.context.term()
-        logger.info("Bus client cleaned and terminated. Thank you !")
-
+        self.client.loop_stop()
