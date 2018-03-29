@@ -47,9 +47,7 @@ setup(
     #
     # Dans notre cas on en a pas besoin, donc je le commente, mais je le
     # laisse pour que vous sachiez que ça existe car c'est très utile.
-    install_requires=["pyzmq",
-                      "PyYaml",
-                      "marshmallow",
+    install_requires=["paho-mqtt",
                       "python-dateutil"],
 
     # Active la prise en compte du fichier MANIFEST.in
@@ -83,7 +81,7 @@ setup(
     # La syntaxe est "nom-de-commande-a-creer = package.module:fonction".
     entry_points={
         'console_scripts': [
-            'sibus-install = sibus_lib.utils:sibus_install',
+            # 'sibus-install = sibus_lib.utils:sibus_install',
         ],
     },
 

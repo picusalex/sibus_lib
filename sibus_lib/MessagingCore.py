@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import base64
 import json
 import logging
 import socket
 import time
-import uuid
 
 import paho.mqtt.client as paho
-from marshmallow import Schema, fields, post_load
 
-from sibus_lib.utils import float_to_datetime, datetime_now_float, safe_get_in_dict
+from sibus_lib.utils import safe_get_in_dict
 
 logger = logging.getLogger()
 
@@ -22,82 +19,6 @@ def set_mqtt_broker(mqtt_host, mqtt_port):
     global MQTT_HOST, MQTT_PORT
     MQTT_HOST = mqtt_host
     MQTT_PORT = mqtt_port
-
-###############################################################################################
-###############################################################################################
-
-class MessageSchema(Schema):
-    uid = fields.Str()
-    origin_host = fields.Str()
-    origin_service = fields.Str()
-    origin_uid = fields.Str()
-    date_creation = fields.Float()
-    topic = fields.Str()
-    b64data = fields.Str()
-
-    @post_load
-    def make_object(self, data):
-        msg = MessageObject()
-        msg.date_creation = data["date_creation"]
-        msg.origin_host = data["origin_host"]
-        msg.origin_service = data["origin_service"]
-        msg.origin_uid = data["origin_uid"]
-        msg.uid = data["uid"]
-        msg.topic = data["topic"]
-        msg.b64data = data["b64data"]
-        return msg
-
-    def toObject(self, json_string):
-        message = self.loads(json_string)
-        return message.data
-
-###############################################################################################
-###############################################################################################
-
-class MessageObject:
-
-    def __init__(self, data=None,
-                    topic="*"
-                 ):
-        # type: (object, object) -> object
-        self.uid = str(uuid.uuid1())
-        self.origin_host = socket.getfqdn()
-        self.origin_service = None
-        self.origin_uid = None
-        self.date_creation = datetime_now_float()
-        self.topic = topic
-        self.set_data(data)
-
-    def __repr__(self):
-        tmp_data = self.get_data()
-        if tmp_data is not None and len(tmp_data) > 2048:
-            data = "long data:%d" % len(tmp_data)
-        else:
-            data = tmp_data
-
-        return "<BusMessage> origin:%s.%s; topic:%s; date:%s; data:%s"%(self.origin_host, self.origin_service, self.topic,
-                                                                        str(float_to_datetime(self.date_creation)),
-                                                                        data)
-
-    def set_data(self, data):
-        if data is None:
-            self.b64data = ""
-            return
-        if type(data) <> dict:
-            logger.error("Data in message bus must be provided as 'dict' !!")
-            self.b64data = ""
-            return
-        self.b64data = base64.b64encode(json.dumps(data))
-
-    def get_data(self):
-        if len(self.b64data) == 0:
-            return None
-        return json.loads(base64.b64decode(self.b64data))
-
-    def toJson(self):
-        schema = MessageSchema()
-        json_result = schema.dumps(self)
-        return json_result.data
 
 
 ###############################################################################################

@@ -7,7 +7,7 @@
     reminiscent.
 """
 
-__version__ = "0.1.2"
+__version__ = "0.2.1"
 
 from sibus_lib.DefaultLogger import mylogger
 from sibus_lib.MessagingCore import BusClient, set_mqtt_broker
