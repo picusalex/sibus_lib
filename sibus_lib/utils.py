@@ -7,6 +7,8 @@ import signal
 import subprocess
 import sys
 
+import unicodedata
+
 logger = logging.getLogger()
 
 
@@ -24,6 +26,10 @@ def parse_num(s):
             return nice_float(s)
         except ValueError:
             return s
+
+
+def safe_string(str):
+    return unicodedata.normalize('NFKD', str).encode('ascii', 'ignore')
 
 def datetime_now():
     return dt.datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f")

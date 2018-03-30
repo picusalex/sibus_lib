@@ -3,7 +3,6 @@
 import json
 import logging
 import socket
-import time
 
 import paho.mqtt.client as paho
 
@@ -115,6 +114,7 @@ class BusClient():
         self.start()
 
     def mqtt_publish(self, topic, payload, qos=0, retain=False):
+        logger.info("=========== MQTT Publish =============")
         if not topic.startswith("sibus"):
             logger.error("!!!!!!!!!!!!!! Message not sent !!!!!!!!!!!!!!!!!!!!!!!!!")
             logger.error("Invalid topic, does not start with 'sibus/': %s" % topic)
@@ -146,8 +146,6 @@ class BusClient():
             logger.error(
                 "MQTT: Message not published, client not connected to %s:%d" % (self.broker_name, self.broker_port))
             logger.error(" * %s = %s" % (topic, json_s))
-            time.sleep(5.0)
-            self.reconnect()
             return False
         elif res.rc == paho.MQTT_ERR_QUEUE_SIZE:
             logger.error("MQTT: Not published, queue full !")
@@ -160,6 +158,7 @@ class BusClient():
             return False
 
     def on_message(self, client, userdata, message):
+        logger.info("=========== MQTT on message =============")
         # json_s = base64.b64decode(message.payload)
         json_s = message.payload
         data_dict = json.loads(json_s)
